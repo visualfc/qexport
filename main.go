@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"flag"
@@ -18,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/visualfc/goapi"
 )
 
 var (
@@ -26,6 +27,7 @@ var (
 
 func init() {
 	flag.StringVar(&flagExportPath, "outpath", "qlang", "output path")
+	goapi.ApiDefaultCtx = false
 }
 
 func main() {
@@ -69,11 +71,11 @@ func main() {
 var sym = regexp.MustCompile(`^pkg (\S+)\s?(.*)?, (?:(var|func|type|const)) ([A-Z]\w*)`)
 
 func export(pkg string, outpath string, skip_osarch bool) error {
-	out, err := exec.Command("go", "tool", "api", pkg).Output()
+	lines, err := goapi.LookupApi(pkg)
 	if err != nil {
 		return err
 	}
-	sc := bufio.NewScanner(bytes.NewBuffer(out))
+
 	fullImport := map[string]string{} // "zip.NewReader" => "archive/zip"
 	ambiguous := map[string]bool{}
 	var keys []string
@@ -81,8 +83,7 @@ func export(pkg string, outpath string, skip_osarch bool) error {
 	var cons []string
 	var vars []string
 	var structs []string
-	for sc.Scan() {
-		l := sc.Text()
+	for _, l := range lines {
 		has := func(v string) bool { return strings.Contains(l, v) }
 		if has("interface, ") || has(", method (") {
 			continue
@@ -117,9 +118,6 @@ func export(pkg string, outpath string, skip_osarch bool) error {
 			}
 		}
 	}
-	if err := sc.Err(); err != nil {
-		return err
-	}
 	sort.Strings(keys)
 
 	if len(cons) == 0 && len(funcs) == 0 {
@@ -148,6 +146,11 @@ func export(pkg string, outpath string, skip_osarch bool) error {
 	outf("\t%q\n", pkg)
 	outf(")\n\n")
 
+	sort.Strings(structs)
+	sort.Strings(funcs)
+	sort.Strings(vars)
+	sort.Strings(cons)
+
 	//check new func map
 	nmap := make(map[string][]string)
 	skip := make(map[string]bool)
@@ -171,6 +174,7 @@ func export(pkg string, outpath string, skip_osarch bool) error {
 	//write exports
 	outf("var Exports = map[string]interface{}{\n")
 	//write new func
+	var newlines []string
 	for s, fns := range nmap {
 		if len(fns) == 1 {
 			qname := toQlangName(s)
@@ -178,7 +182,7 @@ func export(pkg string, outpath string, skip_osarch bool) error {
 			if ast.IsExported(fnNew) {
 				fnNew = pkgName + "." + fnNew
 			}
-			outf("\t%q:\t%s,\n", qname, fnNew)
+			newlines = append(newlines, fmt.Sprintf("\t%q:\t%s,", qname, fnNew))
 		} else if len(fns) > 1 {
 			for _, fn := range fns {
 				qname := toQlangName(fn)
@@ -186,11 +190,15 @@ func export(pkg string, outpath string, skip_osarch bool) error {
 				if ast.IsExported(fnNew) {
 					fnNew = pkgName + "." + fnNew
 				}
-				outf("\t%q:\t%s,\n", qname, fnNew)
+				newlines = append(newlines, fmt.Sprintf("\t%q:\t%s,", qname, fnNew))
 			}
 		}
 	}
-	if len(nmap) != 0 {
+	sort.Strings(newlines)
+	for _, v := range newlines {
+		outf("%s\n", v)
+	}
+	if len(newlines) != 0 {
 		outf("\n")
 	}
 
