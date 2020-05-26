@@ -19,17 +19,6 @@ var (
 	qlang = "qlang" // "spec"
 )
 
-func isSkipPkg(pkg string) bool {
-	for _, path := range strings.Split(pkg, "/") {
-		if path == "internal" {
-			return true
-		} else if path == "vendor" {
-			return true
-		}
-	}
-	return false
-}
-
 type GoObject struct {
 	id  *ast.Ident
 	obj types.Object
@@ -59,7 +48,32 @@ func (v *GoVar) ExportRegister() string {
 
 type GoFunc struct {
 	GoObject
-	typ *types.Func
+	typ  *types.Func
+	recv *types.Named
+}
+
+func (p *GoFunc) Name() string {
+	if p.recv == nil {
+		return p.id.Name
+	} else {
+		return p.recv.Obj().Name() + "." + p.id.Name
+	}
+}
+
+func (p *GoFunc) qRegName() string {
+	if p.recv == nil {
+		return p.id.Name
+	} else {
+		return "(*" + p.recv.Obj().Name() + ")." + p.id.Name
+	}
+}
+
+func (p *GoFunc) CallName() string {
+	if p.recv == nil {
+		return p.obj.Pkg().Name() + "." + p.id.Name
+	} else {
+		return "(*" + p.obj.Pkg().Name() + "." + p.recv.Obj().Name() + ")." + p.id.Name
+	}
 }
 
 func (p *GoFunc) Variadic() bool {
@@ -68,7 +82,11 @@ func (p *GoFunc) Variadic() bool {
 
 // func execName/execStructMethod
 func (p *GoFunc) qExecName() string {
-	return "exec" + p.id.Name
+	if p.recv == nil {
+		return "exec" + p.id.Name
+	} else {
+		return "exec" + p.recv.Obj().Name() + p.id.Name
+	}
 }
 
 func (p *GoFunc) Signature() *types.Signature {
@@ -76,15 +94,28 @@ func (p *GoFunc) Signature() *types.Signature {
 }
 
 func (v *GoFunc) ExportRegister() string {
-	return fmt.Sprintf("I.Func(%q, %v, %v)", v.Name(), v.FullName(), v.qExecName())
+	return fmt.Sprintf("I.Func(%q, %v, %v)", v.qRegName(), v.CallName(), v.qExecName())
 }
 
+/*
+func execReplacerReplace(zero int, p *qlang.Context) {
+	args := p.GetArgs(2)
+	ret := args[0].(*strings.Replacer).Replace(args[1].(string))
+	p.Ret(2, ret)
+}
+*/
 func (v *GoFunc) ExportDecl() string {
 	var decl string
 	argLen := v.Signature().Params().Len()
 	retLen := v.Signature().Results().Len()
 	var paramList []string
 	var retList []string
+
+	var argBase int
+	if v.recv != nil {
+		argLen++ // arg[0] is recv
+		argBase = 1
+	}
 
 	decl += fmt.Sprintf("// %v\n", simpleObjInfo(v.obj))
 	decl += fmt.Sprintf("func %v(zero int, p *%v.Context) {\n", v.qExecName(), qlang)
@@ -104,16 +135,19 @@ func (v *GoFunc) ExportDecl() string {
 			basic = vt.String()
 		}
 		if basic != "" && basic != it {
-			paramList = append(paramList, fmt.Sprintf("%v(args[%v].(%v))", it, i, basic))
+			paramList = append(paramList, fmt.Sprintf("%v(args[%v].(%v))", it, argBase+i, basic))
 		} else {
-			paramList = append(paramList, fmt.Sprintf("args[%v].(%v)", i, it))
+			paramList = append(paramList, fmt.Sprintf("args[%v].(%v)", argBase+i, it))
 		}
 	}
 	decl += "\t"
 	if retLen > 0 {
 		decl += strings.Join(retList, ",") + " := "
 	}
-	decl += v.FullName() + "(" + strings.Join(paramList, ", ") + ")\n"
+	if v.recv != nil {
+		decl += "args[0]."
+	}
+	decl += v.CallName() + "(" + strings.Join(paramList, ", ") + ")\n"
 	if retLen > 0 {
 		decl += fmt.Sprintf("\tp.Ret(%v, %v)\n", argLen, strings.Join(retList, ","))
 	}
@@ -207,6 +241,18 @@ func (p *GoPkg) Sort() {
 	})
 }
 
+func funcRecvType(typ types.Type) *types.Named {
+	switch t := typ.(type) {
+	case *types.Pointer:
+		return funcRecvType(t.Elem())
+	case *types.Named:
+		return t
+	default:
+		log.Fatalf("uncheck funcRecvType %v %T\n", t, t)
+	}
+	return nil
+}
+
 func (p *GoPkg) LoadAll(exported bool) error {
 	for ident, obj := range p.Pkg.TypesInfo.Defs {
 		if exported && !ident.IsExported() {
@@ -230,7 +276,12 @@ func (p *GoPkg) LoadAll(exported bool) error {
 			switch sig := t.Type().Underlying().(type) {
 			case *types.Signature:
 				if sig.Recv() == nil {
-					p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t})
+					p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, nil})
+				} else {
+					named := funcRecvType(sig.Recv().Type())
+					if named != nil && named.Obj().Exported() {
+						p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, named})
+					}
 				}
 			default:
 				log.Printf("warring, unexport types.Func %v %T\n", ident, t.Type().Underlying())

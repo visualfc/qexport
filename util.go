@@ -10,6 +10,17 @@ import (
 	"strings"
 )
 
+func isSkipPkg(pkg string) bool {
+	for _, path := range strings.Split(pkg, "/") {
+		if path == "internal" {
+			return true
+		} else if path == "vendor" {
+			return true
+		}
+	}
+	return false
+}
+
 func checkStructHasUnexportField(decl *ast.GenDecl) bool {
 	if len(decl.Specs) > 0 {
 		if ts, ok := decl.Specs[0].(*ast.TypeSpec); ok {
