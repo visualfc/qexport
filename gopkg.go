@@ -342,14 +342,16 @@ func (p *GoPkg) Sort() {
 	})
 }
 
-func funcRecvType(typ types.Type) *types.Named {
+func funcRecvType(ident *ast.Ident, typ types.Type) *types.Named {
 	switch t := typ.(type) {
 	case *types.Pointer:
-		return funcRecvType(t.Elem())
+		return funcRecvType(ident, t.Elem())
 	case *types.Named:
 		return t
+	case *types.Interface:
+		return nil
 	default:
-		log.Fatalf("uncheck funcRecvType %v %T\n", t, t)
+		log.Fatalf("uncheck funcRecvType %v %v\n", ident, t)
 	}
 	return nil
 }
@@ -379,18 +381,17 @@ func (p *GoPkg) LoadAll(exported bool) error {
 				if sig.Recv() == nil {
 					p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, nil})
 				} else {
-					named := funcRecvType(sig.Recv().Type())
+					named := funcRecvType(ident, sig.Recv().Type())
 					if named != nil && named.Obj().Exported() {
 						switch nt := named.Underlying().(type) {
 						case *types.Struct:
 							p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, named})
+						case *types.Basic, *types.Slice, *types.Map, *types.Signature:
+							p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, named})
 						case *types.Interface:
-							// skip interface
-						case *types.Basic:
-							log.Fatalln("basic ", nt, named.Obj().IsAlias())
-							//
+							// TODO skip interface
 						default:
-							log.Fatalf("unparser types.Signature recv %v %T\n", nt, nt)
+							log.Fatalf("uncheck types.Signature recv %v %v %T\n", p.Pkg.Fset.Position(ident.Pos()), t, nt)
 						}
 					}
 				}
