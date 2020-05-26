@@ -163,11 +163,19 @@ func (v *GoFunc) exportDeclV() string {
 		it := simpleType(iv.Type().String())
 		if i == paramLen-1 {
 			vt := iv.Type().(*types.Slice).Elem()
-			switch vt.Underlying().(type) {
-			case *types.Interface:
-				paramList = append(paramList, fmt.Sprintf("args[%v:]...", argBase+i))
+			// switch vt.Underlying().(type) {
+			// case *types.Interface:
+			// 	paramList = append(paramList, fmt.Sprintf("args[%v:]...", argBase+i))
+			// 	convfn = ""
+			// default:
+			// 	convfn = strings.ReplaceAll(convfn, "T", simpleType(vt.String()))
+			// 	paramList = append(paramList, fmt.Sprintf("conv(args[%v:])...", argBase+i))
+			// }
+			ct := simpleType(vt.String())
+			if ct == "interface{}" {
 				convfn = ""
-			default:
+				paramList = append(paramList, fmt.Sprintf("args[%v:]...", argBase+i))
+			} else {
 				convfn = strings.ReplaceAll(convfn, "T", simpleType(vt.String()))
 				paramList = append(paramList, fmt.Sprintf("conv(args[%v:])...", argBase+i))
 			}
@@ -220,7 +228,9 @@ func (v *GoFunc) ExportDecl() string {
 
 	decl += fmt.Sprintf("// %v\n", simpleObjInfo(v.obj))
 	decl += fmt.Sprintf("func %v(zero int, p *%v.Context) {\n", v.qExecName(), qlang)
-	decl += fmt.Sprintf("\targs := p.GetArgs(%v)\n", argLen)
+	if argLen != 0 {
+		decl += fmt.Sprintf("\targs := p.GetArgs(%v)\n", argLen)
+	}
 	if retLen >= 1 {
 		retList = append(retList, "ret")
 		for i := 1; i < v.Signature().Results().Len(); i++ {
