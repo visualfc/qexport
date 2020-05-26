@@ -39,7 +39,12 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	var types []string
 	types = append(types, "I.RegisterTypes(")
 	for _, v := range p.Types {
-		types = append(types, "\t"+v.ExportRegister()+",")
+		info, err := v.ExportRegister()
+		if err != nil {
+			log.Printf("warning, skip GoTypes %v %v, error %v\n", v.id, v.typ, err)
+			continue
+		}
+		types = append(types, "\t"+info+",")
 	}
 	types = append(types, ")")
 

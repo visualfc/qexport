@@ -161,16 +161,22 @@ func (v *GoFunc) exportDeclV() string {
 	for i := 0; i < paramLen; i++ {
 		iv := v.Signature().Params().At(i)
 		it := simpleType(iv.Type().String())
-		var basic string
-		switch vt := iv.Type().Underlying().(type) {
-		case *types.Basic:
-			basic = vt.String()
-		}
 		if i == paramLen-1 {
 			vt := iv.Type().(*types.Slice).Elem()
-			convfn = strings.ReplaceAll(convfn, "T", simpleType(vt.String()))
-			paramList = append(paramList, fmt.Sprintf("conv(args[%v:])...", argBase+i))
+			switch vt.Underlying().(type) {
+			case *types.Interface:
+				paramList = append(paramList, fmt.Sprintf("args[%v:]...", argBase+i))
+				convfn = ""
+			default:
+				convfn = strings.ReplaceAll(convfn, "T", simpleType(vt.String()))
+				paramList = append(paramList, fmt.Sprintf("conv(args[%v:])...", argBase+i))
+			}
 		} else {
+			var basic string
+			switch vt := iv.Type().Underlying().(type) {
+			case *types.Basic:
+				basic = vt.String()
+			}
 			if basic != "" && basic != it {
 				paramList = append(paramList, fmt.Sprintf("%v(args[%v].(%v))", it, argBase+i, basic))
 			} else {
@@ -255,10 +261,10 @@ type GoType struct {
 	typ *types.TypeName
 }
 
-func (v *GoType) ExportRegister() string {
+func (v *GoType) ExportRegister() (string, error) {
 	kind, err := v.toQlangKind()
 	if err != nil {
-		log.Fatalln(err)
+		return "", err
 	}
 	var item string
 	if strings.HasPrefix(kind, qexec+".") {
@@ -266,7 +272,7 @@ func (v *GoType) ExportRegister() string {
 	} else {
 		item = fmt.Sprintf("I.Rtype(%v)", kind)
 	}
-	return item
+	return item, nil
 }
 
 type GoPkg struct {
@@ -375,7 +381,17 @@ func (p *GoPkg) LoadAll(exported bool) error {
 				} else {
 					named := funcRecvType(sig.Recv().Type())
 					if named != nil && named.Obj().Exported() {
-						p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, named})
+						switch nt := named.Underlying().(type) {
+						case *types.Struct:
+							p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, named})
+						case *types.Interface:
+							// skip interface
+						case *types.Basic:
+							log.Fatalln("basic ", nt, named.Obj().IsAlias())
+							//
+						default:
+							log.Fatalf("unparser types.Signature recv %v %T\n", nt, nt)
+						}
 					}
 				}
 			default:
@@ -485,6 +501,7 @@ func (p *GoType) typeNameToQlangKind() string {
 	case *types.Struct:
 		return fmt.Sprintf("reflect.TypeOf((*%v)(nil))", p.FullName())
 	case *types.Interface:
+		// TODO
 	case *types.Basic:
 		return typesBasicToQlang(typ)
 	case *types.Signature:
