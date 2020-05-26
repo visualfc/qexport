@@ -8,7 +8,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/tools/imports"
 )
+
+func formatCode(src []byte) ([]byte, error) {
+	return format.Source(src)
+}
+
+func goimports(src []byte) ([]byte, error) {
+	return imports.Process("", src, nil)
+}
 
 func export(pkg string, outpath string, skipOSArch bool) error {
 	p, err := LoadGoPkg(pkg)
@@ -92,19 +102,29 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	buf.WriteString(fmt.Sprintf("var I = %v.NewGoPackage(%q)", qlang, p.Pkg.Types.Path()))
 	buf.WriteString("\n\n")
 	buf.WriteString("func init(){\n")
-	buf.WriteString(strings.Join(consts, "\n"))
-	buf.WriteString("\n")
-	buf.WriteString(strings.Join(vars, "\n"))
-	buf.WriteString("\n")
-	buf.WriteString(strings.Join(types, "\n"))
-	buf.WriteString("\n")
-	buf.WriteString(strings.Join(funcreg, "\n"))
-	buf.WriteString("\n")
-	buf.WriteString(strings.Join(funcvreg, "\n"))
+	if len(consts) > 2 {
+		buf.WriteString(strings.Join(consts, "\n"))
+		buf.WriteString("\n")
+	}
+	if len(vars) > 2 {
+		buf.WriteString(strings.Join(vars, "\n"))
+		buf.WriteString("\n")
+	}
+	if len(types) > 2 {
+		buf.WriteString(strings.Join(types, "\n"))
+		buf.WriteString("\n")
+	}
+	if len(funcreg) > 2 {
+		buf.WriteString(strings.Join(funcreg, "\n"))
+		buf.WriteString("\n")
+	}
+	if len(funcvreg) > 2 {
+		buf.WriteString(strings.Join(funcvreg, "\n"))
+	}
 	buf.WriteString("}")
 
 	// format
-	data, err := format.Source(buf.Bytes())
+	data, err := goimports(buf.Bytes())
 	if err != nil {
 		fmt.Println(buf.String())
 		return err
