@@ -94,6 +94,9 @@ func (p *GoFunc) Signature() *types.Signature {
 }
 
 func (v *GoFunc) ExportRegister() string {
+	if v.Variadic() {
+		return fmt.Sprintf("I.Funcv(%q, %v, %v)", v.qRegName(), v.CallName(), v.qExecName())
+	}
 	return fmt.Sprintf("I.Func(%q, %v, %v)", v.qRegName(), v.CallName(), v.qExecName())
 }
 
@@ -103,8 +106,100 @@ func execReplacerReplace(zero int, p *qlang.Context) {
 	ret := args[0].(*strings.Replacer).Replace(args[1].(string))
 	p.Ret(2, ret)
 }
+func execNewReplacer(arity int, p *qlang.Context) {
+	args := p.GetArgs(arity)
+	repl := strings.NewReplacer(qlang.ToStrings(args)...)
+	p.Ret(arity, repl)
+}
+func QexecPrintf(arity int, p *qlang.Context) {
+	args := p.GetArgs(arity)
+	n, err := fmt.Printf(args[0].(string), args[1:]...)
+	p.Ret(arity, n, err)
+}
+
+// ToStrings converts []interface{} into []string.
+func ToStrings(args []interface{}) []string {
+	ret := make([]string, len(args))
+	for i, arg := range args {
+		ret[i] = arg.(string)
+	}
+	return ret
+}
 */
+
+func (v *GoFunc) exportDeclV() string {
+	var decl string
+	argLen := v.Signature().Params().Len()
+	retLen := v.Signature().Results().Len()
+	var paramList []string
+	var retList []string
+	var convfn string = `	conv := func(args []interface{}) []T {
+		ret := make([]T, len(args))
+		for i, arg := range args {
+			ret[i] = arg.(T)
+		}
+		return ret
+	}
+`
+
+	var argBase int
+	if v.recv != nil {
+		argLen++ // arg[0] is recv
+		argBase = 1
+	}
+
+	decl += fmt.Sprintf("// %v\n", simpleObjInfo(v.obj))
+	decl += fmt.Sprintf("func %v(arity int, p *%v.Context) {\n", v.qExecName(), qlang)
+	decl += fmt.Sprint("\targs := p.GetArgs(arity)\n")
+	if retLen >= 1 {
+		retList = append(retList, "ret")
+		for i := 1; i < v.Signature().Results().Len(); i++ {
+			retList = append(retList, fmt.Sprintf("ret%v", i))
+		}
+	}
+	paramLen := v.Signature().Params().Len()
+	for i := 0; i < paramLen; i++ {
+		iv := v.Signature().Params().At(i)
+		it := simpleType(iv.Type().String())
+		var basic string
+		switch vt := iv.Type().Underlying().(type) {
+		case *types.Basic:
+			basic = vt.String()
+		}
+		if i == paramLen-1 {
+			vt := iv.Type().(*types.Slice).Elem()
+			convfn = strings.ReplaceAll(convfn, "T", simpleType(vt.String()))
+			paramList = append(paramList, fmt.Sprintf("conv(args[%v:])...", argBase+i))
+		} else {
+			if basic != "" && basic != it {
+				paramList = append(paramList, fmt.Sprintf("%v(args[%v].(%v))", it, argBase+i, basic))
+			} else {
+				paramList = append(paramList, fmt.Sprintf("args[%v].(%v)", argBase+i, it))
+			}
+		}
+	}
+	// add conv func
+	decl += convfn
+	// add call func
+	decl += "\t"
+	if retLen > 0 {
+		decl += strings.Join(retList, ",") + " := "
+	}
+	if v.recv != nil {
+		decl += "args[0]."
+	}
+	decl += v.CallName() + "(" + strings.Join(paramList, ", ") + ")\n"
+	if retLen > 0 {
+		decl += fmt.Sprintf("\tp.Ret(arity, %v)\n", strings.Join(retList, ","))
+	}
+	decl += "}"
+	return decl
+}
+
 func (v *GoFunc) ExportDecl() string {
+	if v.Variadic() {
+		return v.exportDeclV()
+	}
 	var decl string
 	argLen := v.Signature().Params().Len()
 	retLen := v.Signature().Results().Len()

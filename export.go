@@ -45,19 +45,20 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 
 	// export func
 	var funcreg []string
-	var funcdec []string
 	var funcvreg []string
-	var funcvdec []string
+	var funcdec []string
 	funcreg = append(funcreg, "I.RegisterFuncs(")
+	funcvreg = append(funcvreg, "I.RegisterFuncvs(")
 	for _, v := range p.Funcs {
+		funcdec = append(funcdec, v.ExportDecl())
 		if v.Variadic() {
-
+			funcvreg = append(funcvreg, "\t"+v.ExportRegister()+",")
 		} else {
-			funcdec = append(funcdec, v.ExportDecl())
 			funcreg = append(funcreg, "\t"+v.ExportRegister()+",")
 		}
 	}
 	funcreg = append(funcreg, ")")
+	funcvreg = append(funcvreg, ")")
 
 	var heads []string
 
@@ -81,7 +82,6 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	buf.WriteString(strings.Join(heads, "\n"))
 	buf.WriteString("\n\n")
 	buf.WriteString(strings.Join(funcdec, "\n"))
-	buf.WriteString(strings.Join(funcvdec, "\n"))
 	buf.WriteString("\n\n")
 	buf.WriteString("// I is a Go package instance.\n")
 	buf.WriteString(fmt.Sprintf("var I = %v.NewGoPackage(%q)", qlang, p.Pkg.Types.Path()))
@@ -104,7 +104,7 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 		fmt.Println(buf.String())
 		return err
 	}
-	fmt.Println(string(data))
+	//fmt.Println(string(data))
 
 	// write root dir
 	root := filepath.Join(outpath, pkg)
