@@ -7,7 +7,6 @@ import (
 	"go/types"
 	"log"
 	"sort"
-	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -457,12 +456,10 @@ func (v *GoConst) ExportRegister() (string, error) {
 		return "", err
 	}
 	if v.typ.Val().Kind() == constant.Int {
-		_, err := strconv.ParseInt(v.typ.Val().String(), 10, 64)
-		if err != nil {
-			_, err := strconv.ParseUint(v.typ.Val().String(), 10, 64)
-			if err != nil {
-				return "", fmt.Errorf("constant %v %v overflows uint64", v.id, v.typ)
-			}
+		kind := checkConstType(v.typ.Val().String())
+		if kind == ConstInt64 {
+			return fmt.Sprintf("I.Const(%q, %v, int64(%v))", v.id.Name, kind, v.FullName()), nil
+		} else if kind == ConstUnit64 {
 			return fmt.Sprintf("I.Const(%q, %v, uint64(%v))", v.id.Name, kind, v.FullName()), nil
 		}
 	}
