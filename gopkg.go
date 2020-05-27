@@ -85,7 +85,7 @@ func (p *GoFunc) qExecName() string {
 	if p.recv == nil {
 		return "exec" + p.id.Name
 	} else {
-		return "exec" + p.recv.Obj().Name() + p.id.Name
+		return "execm" + p.recv.Obj().Name() + p.id.Name
 	}
 }
 
@@ -368,60 +368,45 @@ func funcRecvType(ident *ast.Ident, typ types.Type) *types.Named {
 
 func (p *GoPkg) LoadAll(exported bool) error {
 	for ident, obj := range p.Pkg.TypesInfo.Defs {
-		if exported && !ident.IsExported() {
+		if obj == nil || !ident.IsExported() {
 			continue
 		}
-		if obj == nil {
-			continue
-		}
-		switch t := obj.(type) {
-		case *types.Const:
-			if obj.Parent() == p.Pkg.Types.Scope() {
-				p.Consts = append(p.Consts, &GoConst{GoObject{ident, obj}, t})
+		if obj.Parent() == p.Pkg.Types.Scope() {
+			switch typ := obj.(type) {
+			case *types.Const:
+				p.Consts = append(p.Consts, &GoConst{GoObject{ident, obj}, typ})
+			case *types.Var:
+				p.Vars = append(p.Vars, &GoVar{GoObject{ident, obj}, typ})
+			case *types.Func:
+				p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, typ, nil})
+			case *types.TypeName:
+				p.Types = append(p.Types, &GoType{GoObject{ident, obj}, typ})
+			case *types.Label:
+				// skip
+			case *types.PkgName:
+			// skip
+			default:
+				log.Printf("warring, uncheck %v %T, %v \n", ident, typ, p.Pkg.Fset.Position(ident.Pos()))
 			}
-		case *types.Var:
-			// t.IsField has bug: go/build -> Sfiles
-			// if t.IsField() {
-			// 	continue
-			// }
-			if obj.Parent() == p.Pkg.Types.Scope() {
-				p.Vars = append(p.Vars, &GoVar{GoObject{ident, obj}, t})
-			}
-		case *types.Func:
-			switch sig := t.Type().Underlying().(type) {
-			case *types.Signature:
-				if sig.Recv() == nil {
-					p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, nil})
-				} else {
+		} else {
+			if typ, ok := obj.(*types.Func); ok {
+				sig, ok := typ.Type().Underlying().(*types.Signature)
+				if ok && sig.Recv() != nil {
 					named := funcRecvType(ident, sig.Recv().Type())
-					if named != nil && named.Obj().Exported() {
+					if named != nil && named.Obj().Exported() && named.Obj().Parent() == p.Pkg.Types.Scope() {
 						switch nt := named.Underlying().(type) {
 						case *types.Struct:
-							p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, named})
+							p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, typ, named})
 						case *types.Basic, *types.Slice, *types.Map, *types.Signature:
-							p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, t, named})
+							p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, typ, named})
 						case *types.Interface:
 							// TODO skip interface
 						default:
-							log.Fatalf("uncheck types.Signature recv %v %v %T\n", p.Pkg.Fset.Position(ident.Pos()), t, nt)
+							log.Fatalf("uncheck types.Func %v %v %T\n", ident, obj, nt)
 						}
 					}
 				}
-			default:
-				log.Printf("warring, unexport types.Func %v %T\n", ident, t.Type().Underlying())
 			}
-		case *types.TypeName:
-			//p.checkTypeName(ident, obj, t.Type().Underlying())
-			if obj.Parent() == p.Pkg.Types.Scope() {
-				p.Types = append(p.Types, &GoType{GoObject{ident, obj}, t})
-			}
-		case *types.Label:
-			// skip
-		case *types.PkgName:
-			// skip
-			// import mypkg "pkg"
-		default:
-			log.Printf("warring, unexport %v %T\n", ident, t)
 		}
 	}
 	return nil
