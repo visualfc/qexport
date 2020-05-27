@@ -43,8 +43,8 @@ type GoVar struct {
 	typ *types.Var
 }
 
-func (v *GoVar) ExportRegister() string {
-	return fmt.Sprintf("I.Var(%q, &%v)", v.Name(), v.FullName())
+func (v *GoVar) ExportRegister() (string, error) {
+	return fmt.Sprintf("I.Var(%q, &%v)", v.Name(), v.FullName()), nil
 }
 
 type GoFunc struct {
@@ -94,11 +94,11 @@ func (p *GoFunc) Signature() *types.Signature {
 	return p.typ.Type().Underlying().(*types.Signature)
 }
 
-func (v *GoFunc) ExportRegister() string {
+func (v *GoFunc) ExportRegister() (string, error) {
 	if v.Variadic() {
-		return fmt.Sprintf("I.Funcv(%q, %v, %v)", v.qRegName(), v.CallName(), v.qExecName())
+		return fmt.Sprintf("I.Funcv(%q, %v, %v)", v.qRegName(), v.CallName(), v.qExecName()), nil
 	}
-	return fmt.Sprintf("I.Func(%q, %v, %v)", v.qRegName(), v.CallName(), v.qExecName())
+	return fmt.Sprintf("I.Func(%q, %v, %v)", v.qRegName(), v.CallName(), v.qExecName()), nil
 }
 
 /*
@@ -128,7 +128,7 @@ func ToStrings(args []interface{}) []string {
 }
 */
 
-func (v *GoFunc) exportDeclV() string {
+func (v *GoFunc) exportDeclV() (string, error) {
 	var decl string
 	argLen := v.Signature().Params().Len()
 	retLen := v.Signature().Results().Len()
@@ -208,10 +208,10 @@ func (v *GoFunc) exportDeclV() string {
 		decl += fmt.Sprintf("\tp.Ret(arity, %v)\n", strings.Join(retList, ","))
 	}
 	decl += "}"
-	return decl
+	return decl, nil
 }
 
-func (v *GoFunc) ExportDecl() string {
+func (v *GoFunc) ExportDecl() (string, error) {
 	if v.Variadic() {
 		return v.exportDeclV()
 	}
@@ -242,10 +242,16 @@ func (v *GoFunc) ExportDecl() string {
 		iv := v.Signature().Params().At(i)
 		it := simpleType(iv.Type().String())
 		var basic string
-		switch vt := iv.Type().Underlying().(type) {
+		switch vt := iv.Type().(type) {
 		case *types.Basic:
 			basic = vt.String()
+		case *types.Named:
+			if !vt.Obj().Exported() {
+				return "", fmt.Errorf("param type is internal %v", vt)
+			}
+		default:
 		}
+
 		if basic != "" && basic != it {
 			paramList = append(paramList, fmt.Sprintf("%v(args[%v].(%v))", it, argBase+i, basic))
 		} else {
@@ -264,7 +270,7 @@ func (v *GoFunc) ExportDecl() string {
 		decl += fmt.Sprintf("\tp.Ret(%v, %v)\n", argLen, strings.Join(retList, ","))
 	}
 	decl += "}"
-	return decl
+	return decl, nil
 }
 
 type GoType struct {
@@ -445,18 +451,22 @@ func (v *GoConst) Name() string {
 	return v.id.Name
 }
 
-func (v *GoConst) ExportRegister() string {
+func (v *GoConst) ExportRegister() (string, error) {
 	kind, err := v.toQlangKind()
 	if err != nil {
-		log.Fatalln(err)
+		return "", err
 	}
 	if v.typ.Val().Kind() == constant.Int {
 		_, err := strconv.ParseInt(v.typ.Val().String(), 10, 64)
 		if err != nil {
-			return fmt.Sprintf("I.Const(%q, %v, uint64(%v))", v.id.Name, kind, v.FullName())
+			_, err := strconv.ParseUint(v.typ.Val().String(), 10, 64)
+			if err != nil {
+				return "", fmt.Errorf("constant %v %v overflows uint64", v.id, v.typ)
+			}
+			return fmt.Sprintf("I.Const(%q, %v, uint64(%v))", v.id.Name, kind, v.FullName()), nil
 		}
 	}
-	return fmt.Sprintf("I.Const(%q, %v, %v)", v.id.Name, kind, v.FullName())
+	return fmt.Sprintf("I.Const(%q, %v, %v)", v.id.Name, kind, v.FullName()), nil
 }
 
 func typesBasicToQlang(typ *types.Basic) string {
@@ -528,5 +538,5 @@ func (p *GoType) toQlangKind() (string, error) {
 	if kind != "" {
 		return kind, nil
 	}
-	return "", fmt.Errorf("unparser GoTypes %v %v", p.id, p.typ)
+	return "", fmt.Errorf("unparser type %v %T", p.id, p.typ.Type().Underlying())
 }

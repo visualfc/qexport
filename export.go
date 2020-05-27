@@ -33,7 +33,12 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	var consts []string
 	consts = append(consts, "I.RegisterConsts(")
 	for _, v := range p.Consts {
-		consts = append(consts, "\t"+v.ExportRegister()+",")
+		info, err := v.ExportRegister()
+		if err != nil {
+			log.Printf("warning, skip const %v, %v\n", v.id, err)
+			continue
+		}
+		consts = append(consts, "\t"+info+",")
 	}
 	consts = append(consts, ")")
 
@@ -41,7 +46,12 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	var vars []string
 	vars = append(vars, "I.RegisterVars(")
 	for _, v := range p.Vars {
-		vars = append(vars, "\t"+v.ExportRegister()+",")
+		info, err := v.ExportRegister()
+		if err != nil {
+			log.Printf("warning, skip var %v, %v\n", v.id, err)
+			continue
+		}
+		vars = append(vars, "\t"+info+",")
 	}
 	vars = append(vars, ")")
 
@@ -51,7 +61,7 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	for _, v := range p.Types {
 		info, err := v.ExportRegister()
 		if err != nil {
-			log.Printf("warning, skip GoTypes %v %v, error %v\n", v.id, v.typ, err)
+			log.Printf("warning, skip type %v, %v\n", v.id, err)
 			continue
 		}
 		types = append(types, "\t"+info+",")
@@ -65,11 +75,17 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	funcreg = append(funcreg, "I.RegisterFuncs(")
 	funcvreg = append(funcvreg, "I.RegisterFuncvs(")
 	for _, v := range p.Funcs {
-		funcdec = append(funcdec, v.ExportDecl())
+		decl, err := v.ExportDecl()
+		if err != nil {
+			log.Printf("warning, skip func %v, %v\n", v.id, err)
+			continue
+		}
+		funcdec = append(funcdec, decl)
+		info, _ := v.ExportRegister()
 		if v.Variadic() {
-			funcvreg = append(funcvreg, "\t"+v.ExportRegister()+",")
+			funcvreg = append(funcvreg, "\t"+info+",")
 		} else {
-			funcreg = append(funcreg, "\t"+v.ExportRegister()+",")
+			funcreg = append(funcreg, "\t"+info+",")
 		}
 	}
 	funcreg = append(funcreg, ")")
