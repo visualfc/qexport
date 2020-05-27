@@ -33,6 +33,9 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	var consts []string
 	consts = append(consts, "I.RegisterConsts(")
 	for _, v := range p.Consts {
+		if !filterSym(v.Name()) {
+			continue
+		}
 		info, err := v.ExportRegister()
 		if err != nil {
 			log.Printf("warning, skip const %v, %v\n", v.id, err)
@@ -46,6 +49,9 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	var vars []string
 	vars = append(vars, "I.RegisterVars(")
 	for _, v := range p.Vars {
+		if !filterSym(v.Name()) {
+			continue
+		}
 		info, err := v.ExportRegister()
 		if err != nil {
 			log.Printf("warning, skip var %v, %v\n", v.id, err)
@@ -59,6 +65,9 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	var types []string
 	types = append(types, "I.RegisterTypes(")
 	for _, v := range p.Types {
+		if !filterSym(v.Name()) {
+			continue
+		}
 		info, err := v.ExportRegister()
 		if err != nil {
 			log.Printf("warning, skip type %v, %v\n", v.id, err)
@@ -75,6 +84,9 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	funcreg = append(funcreg, "I.RegisterFuncs(")
 	funcvreg = append(funcvreg, "I.RegisterFuncvs(")
 	for _, v := range p.Funcs {
+		if !filterSym(v.Name()) {
+			continue
+		}
 		decl, err := v.ExportDecl()
 		if err != nil {
 			log.Printf("warning, skip func %v, %v\n", v.id, err)

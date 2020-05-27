@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -18,6 +19,7 @@ var (
 	flagCustomContext            string
 	flagExportPath               string
 	flagUpdatePath               string
+	flagFilterList               string
 )
 
 const help = `Export go packages to qlang modules.
@@ -34,17 +36,16 @@ func usage() {
 }
 
 func init() {
-	flag.StringVar(&flagCustomContext, "contexts", "", "optional comma-separated list of <goos>-<goarch>[-cgo] to override default contexts.")
-	flag.BoolVar(&flagDefaultContext, "defctx", false, "optional use default context for build, default use all contexts.")
-	flag.BoolVar(&flagRenameNewTypeFunc, "convnew", true, "optional convert NewType func to type func")
-	flag.BoolVar(&flagSkipErrorImplementStruct, "skiperrimpl", true, "optional skip error interface implement struct.")
-	flag.BoolVar(&flagQlangLowerCaseStyle, "lowercase", true, "optional use qlang lower case style.")
-	flag.StringVar(&flagExportPath, "outpath", "./qlang", "optional set export root path")
-	flag.StringVar(&flagUpdatePath, "updatepath", "", "option set update qlang package root")
+	// flag.StringVar(&flagCustomContext, "contexts", "", "optional comma-separated list of <goos>-<goarch>[-cgo] to override default contexts.")
+	// flag.BoolVar(&flagDefaultContext, "defctx", false, "optional use default context for build, default use all contexts.")
+	//flag.BoolVar(&flagSkipErrorImplementStruct, "skiperrimpl", true, "optional skip error interface implement struct.")
+	flag.StringVar(&flagExportPath, "outdir", "./qlang", "optional set export output root path")
+	flag.StringVar(&flagFilterList, "filter", "", "optional set export filter regular expression list, separated by spaces.")
 }
 
 var (
-	ac *ApiCheck
+	ac     *ApiCheck
+	reList []*regexp.Regexp
 )
 
 func main() {
@@ -59,6 +60,15 @@ func main() {
 	if flagCustomContext != "" {
 		flagDefaultContext = false
 		setCustomContexts(flagCustomContext)
+	}
+	if flagFilterList != "" {
+		for _, expr := range strings.Split(flagFilterList, " ") {
+			re, err := regexp.Compile(expr)
+			if err != nil {
+				log.Fatalln("regexp error", err)
+			}
+			reList = append(reList, re)
+		}
 	}
 
 	//load ApiCheck
@@ -108,4 +118,16 @@ func main() {
 	for _, pkg := range exportd {
 		log.Printf("export pkg %q success.\n", pkg)
 	}
+}
+
+func filterSym(sym string) bool {
+	if len(reList) == 0 {
+		return true
+	}
+	for _, re := range reList {
+		if re.MatchString(sym) {
+			return true
+		}
+	}
+	return false
 }

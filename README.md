@@ -6,7 +6,14 @@ Export go package to qlang module
 
 The Q Language : https://github.com/qiniu/qlang
 
+```
+Usage:
+  qexport [option] packages
 
-Usages:
+The packages for go package list or std for golang all standard packages.
 
-		qexport [-outpath path] [pkgs|std]
+  -filter string
+    	optional set export filter regular expression list, separated by spaces.
+  -outdir string
+    	optional set export output root path (default "./qlang")
+```   
