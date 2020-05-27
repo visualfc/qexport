@@ -376,7 +376,9 @@ func (p *GoPkg) LoadAll(exported bool) error {
 		}
 		switch t := obj.(type) {
 		case *types.Const:
-			p.Consts = append(p.Consts, &GoConst{GoObject{ident, obj}, t})
+			if obj.Parent() == p.Pkg.Types.Scope() {
+				p.Consts = append(p.Consts, &GoConst{GoObject{ident, obj}, t})
+			}
 		case *types.Var:
 			// t.IsField has bug: go/build -> Sfiles
 			// if t.IsField() {
@@ -410,7 +412,9 @@ func (p *GoPkg) LoadAll(exported bool) error {
 			}
 		case *types.TypeName:
 			//p.checkTypeName(ident, obj, t.Type().Underlying())
-			p.Types = append(p.Types, &GoType{GoObject{ident, obj}, t})
+			if obj.Parent() == p.Pkg.Types.Scope() {
+				p.Types = append(p.Types, &GoType{GoObject{ident, obj}, t})
+			}
 		case *types.Label:
 			// skip
 		case *types.PkgName:
@@ -460,7 +464,7 @@ func (v *GoConst) ExportRegister() string {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	return fmt.Sprintf("I.Const(%q, %v, %v)", v.id.Name, kind, v.typ.Val())
+	return fmt.Sprintf("I.Const(%q, %v, %v)", v.id.Name, kind, v.FullName())
 }
 
 func typesBasicToQlang(typ *types.Basic) string {
