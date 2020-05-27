@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -448,6 +449,12 @@ func (v *GoConst) ExportRegister() string {
 	kind, err := v.toQlangKind()
 	if err != nil {
 		log.Fatalln(err)
+	}
+	if v.typ.Val().Kind() == constant.Int {
+		_, err := strconv.ParseInt(v.typ.Val().String(), 10, 64)
+		if err != nil {
+			return fmt.Sprintf("I.Const(%q, %v, uint64(%v))", v.id.Name, kind, v.FullName())
+		}
 	}
 	return fmt.Sprintf("I.Const(%q, %v, %v)", v.id.Name, kind, v.FullName())
 }

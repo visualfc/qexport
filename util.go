@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -19,6 +20,18 @@ func isSkipPkg(pkg string) bool {
 		}
 	}
 	return false
+}
+
+func checkConstType(value string) KeyType {
+	_, err := strconv.ParseInt(value, 10, 32)
+	if err != nil {
+		if value[0] == '-' {
+			return ConstInt64
+		} else {
+			return ConstUnit64
+		}
+	}
+	return Normal
 }
 
 func checkStructHasUnexportField(decl *ast.GenDecl) bool {
