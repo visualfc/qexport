@@ -109,15 +109,21 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	heads = append(heads, "import (")
 	heads = append(heads, fmt.Sprintf("\t%q", p.Pkg.Types.Path()))
 	heads = append(heads, "\t\"reflect\"")
-	if qexec == "exec" {
-		heads = append(heads, "\t\"github.com/qiniu/qlang/v6/exec\"")
+
+	if qspec == qspec_def {
+		heads = append(heads, fmt.Sprintf("\t%q", qspec_lib))
 	} else {
-		heads = append(heads, "\t"+qexec+"\"github.com/qiniu/qlang/v6/exec\"")
+		heads = append(heads, fmt.Sprintf("\t%v %q", qspec, qspec_lib))
 	}
-	if qlang == "spec" {
-		heads = append(heads, "\t\"github.com/qiniu/qlang/v6/spec\"")
+	if qexec == qexec_def {
+		heads = append(heads, fmt.Sprintf("\t%q", qexec_lib))
 	} else {
-		heads = append(heads, "\t"+qlang+"\"github.com/qiniu/qlang/v6/spec\"")
+		heads = append(heads, fmt.Sprintf("\t%v %q", qexec, qexec_lib))
+	}
+	if qlang == qlang_def {
+		heads = append(heads, fmt.Sprintf("\t%q", qlang_lib))
+	} else {
+		heads = append(heads, fmt.Sprintf("\t%v %q", qspec, qspec_lib))
 	}
 	heads = append(heads, ")")
 

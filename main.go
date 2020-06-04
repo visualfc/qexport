@@ -22,7 +22,7 @@ var (
 	flagFilterList               string
 )
 
-const help = `Export go packages to qlang modules.
+const help = `Export Go packages to Go+ modules.
 
 Usage:
   qexport [option] packages
@@ -39,7 +39,7 @@ func init() {
 	// flag.StringVar(&flagCustomContext, "contexts", "", "optional comma-separated list of <goos>-<goarch>[-cgo] to override default contexts.")
 	// flag.BoolVar(&flagDefaultContext, "defctx", false, "optional use default context for build, default use all contexts.")
 	//flag.BoolVar(&flagSkipErrorImplementStruct, "skiperrimpl", true, "optional skip error interface implement struct.")
-	flag.StringVar(&flagExportPath, "outdir", "./qlang", "optional set export output root path")
+	flag.StringVar(&flagExportPath, "outdir", "./lib", "optional set export output root path")
 	flag.StringVar(&flagFilterList, "filter", "", "optional set export filter regular expression list, separated by spaces.")
 }
 

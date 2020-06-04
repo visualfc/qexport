@@ -6,17 +6,33 @@ import (
 	"go/constant"
 	"go/types"
 	"log"
+	"os"
 	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
 
-//qexec "github.com/qiniu/qlang/v6/exec"
-//qlang "github.com/qiniu/qlang/v6/spec"
+// "github.com/qiniu/goplus/gop"
+// "github.com/qiniu/goplus/exec.spec"
+// "github.com/qiniu/goplus/exec/bytecode"
+
+const (
+	qlang_lib = "github.com/qiniu/goplus/gop"
+	qspec_lib = "github.com/qiniu/goplus/exec.spec"
+	qexec_lib = "github.com/qiniu/goplus/exec/bytecode"
+)
+
+const (
+	qspec_def = "spec"     // "github.com/qiniu/goplus/exec.spec"
+	qexec_def = "bytecode" // "github.com/qiniu/goplus/exec/bytecode"
+	qlang_def = "gop"      // "github.com/qiniu/goplus/gop"
+)
+
 var (
-	qexec = "qexec" // "exec"
-	qlang = "qlang" // "spec"
+	qspec = "qspec"
+	qexec = "qexec"
+	qlang = "gop"
 )
 
 type GoObject struct {
@@ -64,7 +80,11 @@ func (p *GoFunc) qRegName() string {
 	if p.recv == nil {
 		return p.id.Name
 	} else {
-		return "(*" + p.recv.Obj().Name() + ")." + p.id.Name
+		info := "("
+		if p.RecvIsPointer() {
+			info += "*"
+		}
+		return info + p.recv.Obj().Name() + ")." + p.id.Name
 	}
 }
 
@@ -72,8 +92,20 @@ func (p *GoFunc) CallName() string {
 	if p.recv == nil {
 		return p.obj.Pkg().Name() + "." + p.id.Name
 	} else {
-		return "(*" + p.obj.Pkg().Name() + "." + p.recv.Obj().Name() + ")." + p.id.Name
+		info := "("
+		if p.RecvIsPointer() {
+			info += "*"
+		}
+		return info + p.obj.Pkg().Name() + "." + p.recv.Obj().Name() + ")." + p.id.Name
 	}
+}
+
+func (p *GoFunc) RecvIsPointer() bool {
+	if p.recv == nil {
+		return false
+	}
+	_, ok := p.Signature().Recv().Type().(*types.Pointer)
+	return ok
 }
 
 func (p *GoFunc) Variadic() bool {
@@ -90,7 +122,7 @@ func (p *GoFunc) qExecName() string {
 }
 
 func (p *GoFunc) Signature() *types.Signature {
-	return p.typ.Type().Underlying().(*types.Signature)
+	return p.typ.Type().(*types.Signature)
 }
 
 func (v *GoFunc) ExportRegister() (string, error) {
@@ -283,7 +315,7 @@ func (v *GoType) ExportRegister() (string, error) {
 		return "", err
 	}
 	var item string
-	if strings.HasPrefix(kind, qexec+".") {
+	if strings.HasPrefix(kind, qspec+".") {
 		item = fmt.Sprintf("I.Type(%q, %v)", v.id.Name, kind)
 	} else {
 		item = fmt.Sprintf("I.Rtype(%v)", kind)
@@ -304,6 +336,7 @@ func LoadGoPkg(pkg string) (*GoPkg, error) {
 		packages.NeedSyntax |
 		packages.NeedTypesInfo |
 		packages.NeedTypes}
+	cfg.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
 	pkgs, err := packages.Load(cfg, pkg)
 	if err != nil {
 		return nil, err
@@ -429,18 +462,18 @@ func (p *GoPkg) LoadAll(exported bool) error {
 	// ConstUnboundComplex - unbound complex type
 	ConstUnboundComplex = spec.ConstUnboundComplex
 */
-func (p *GoConst) toQlangKind() (string, error) {
+func (p *GoConst) toQlangKind(pkg string) (string, error) {
 	switch p.typ.Val().Kind() {
 	case constant.Bool:
 		return "reflect.Bool", nil
 	case constant.String:
-		return qexec + ".ConstBoundString", nil
+		return pkg + ".ConstBoundString", nil
 	case constant.Int:
-		return qexec + ".ConstUnboundInt", nil
+		return pkg + ".ConstUnboundInt", nil
 	case constant.Float:
-		return qexec + ".ConstUnboundFloat", nil
+		return pkg + ".ConstUnboundFloat", nil
 	case constant.Complex:
-		return qexec + ".ConstUnboundComplex", nil
+		return pkg + ".ConstUnboundComplex", nil
 	default:
 		return "", fmt.Errorf("unknow kind of const %v %v", p.id, p.typ)
 	}
@@ -451,7 +484,7 @@ func (v *GoConst) Name() string {
 }
 
 func (v *GoConst) ExportRegister() (string, error) {
-	kind, err := v.toQlangKind()
+	kind, err := v.toQlangKind(qspec)
 	if err != nil {
 		return "", err
 	}
@@ -466,44 +499,44 @@ func (v *GoConst) ExportRegister() (string, error) {
 	return fmt.Sprintf("I.Const(%q, %v, %v)", v.id.Name, kind, v.FullName()), nil
 }
 
-func typesBasicToQlang(typ *types.Basic) string {
+func typesBasicToQlang(pkg string, typ *types.Basic) string {
 	switch typ.Kind() {
 	case types.Bool:
-		return qexec + ".TyBool"
+		return pkg + ".TyBool"
 	case types.Int:
-		return qexec + ".TyInt"
+		return pkg + ".TyInt"
 	case types.Int8:
-		return qexec + ".TyInt8"
+		return pkg + ".TyInt8"
 	case types.Int16:
-		return qexec + ".TyInt16"
+		return pkg + ".TyInt16"
 	case types.Int32:
-		return qexec + ".TyInt32"
+		return pkg + ".TyInt32"
 	case types.Int64:
-		return qexec + ".TyInt64"
+		return pkg + ".TyInt64"
 	case types.Uint:
-		return qexec + ".TyUint"
+		return pkg + ".TyUint"
 	case types.Uint8:
-		return qexec + ".TyUint8"
+		return pkg + ".TyUint8"
 	case types.Uint16:
-		return qexec + ".TyUint16"
+		return pkg + ".TyUint16"
 	case types.Uint32:
-		return qexec + ".TyUint32"
+		return pkg + ".TyUint32"
 	case types.Uint64:
-		return qexec + ".TyUint64"
+		return pkg + ".TyUint64"
 	case types.Uintptr:
-		return qexec + ".TyUintptr"
+		return pkg + ".TyUintptr"
 	case types.Float32:
-		return qexec + ".TyFloat32"
+		return pkg + ".TyFloat32"
 	case types.Float64:
-		return qexec + ".TyFloat64"
+		return pkg + ".TyFloat64"
 	case types.Complex64:
-		return qexec + ".TyComplex64"
+		return pkg + ".TyComplex64"
 	case types.Complex128:
-		return qexec + ".TyComplex128"
+		return pkg + ".TyComplex128"
 	case types.String:
-		return qexec + ".TyString"
+		return pkg + ".TyString"
 	case types.UnsafePointer:
-		return qexec + ".TyUnsafePointer"
+		return pkg + ".TyUnsafePointer"
 	default:
 		log.Printf("uncheck types.Basic kind %v\n", typ)
 	}
@@ -517,7 +550,7 @@ func (p *GoType) typeNameToQlangKind() string {
 	case *types.Interface:
 		// TODO
 	case *types.Basic:
-		return typesBasicToQlang(typ)
+		return typesBasicToQlang(qspec, typ)
 	case *types.Signature:
 	case *types.Slice:
 	case *types.Array:
