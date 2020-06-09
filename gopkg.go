@@ -463,36 +463,58 @@ func (p *GoPkg) LoadAll(exported bool) error {
 	ConstUnboundComplex = spec.ConstUnboundComplex
 */
 func (p *GoConst) toQlangKind(pkg string) (string, error) {
-	switch p.typ.Val().Kind() {
-	case constant.Bool:
-		return "reflect.Bool", nil
-	case constant.String:
-		return pkg + ".ConstBoundString", nil
-	case constant.Int:
-		return pkg + ".ConstUnboundInt", nil
-	case constant.Float:
-		return pkg + ".ConstUnboundFloat", nil
-	case constant.Complex:
-		return pkg + ".ConstUnboundComplex", nil
-	default:
-		return "", fmt.Errorf("unknow kind of const %v %v", p.id, p.typ)
+	baisc, ok := p.typ.Type().Underlying().(*types.Basic)
+	if !ok {
+		return "", fmt.Errorf("un basic of const %v %v", p.id, p.typ)
 	}
+	switch baisc.Kind() {
+	case types.UntypedBool:
+		return "reflect.Bool", nil
+	case types.UntypedInt:
+		return pkg + ".ConstUnboundInt", nil
+	case types.UntypedRune:
+		return pkg + ".ConstUnboundRune", nil
+	case types.UntypedFloat:
+		return pkg + ".ConstUnboundFloat", nil
+	case types.UntypedComplex:
+		return pkg + ".ConstUnboundComplex", nil
+	case types.UntypedString:
+		return pkg + ".ConstUnboundString", nil
+	case types.UntypedNil:
+		return pkg + ".ConstUnboundPtr", nil
+	}
+	// TODO
+	return "reflect." + strings.Title(baisc.Name()), nil
+
+	// switch p.typ.Val().Kind() {
+	// case constant.Bool:
+	// 	return "reflect.Bool", nil
+	// case constant.String:
+	// 	return pkg + ".ConstBoundString", nil
+	// case constant.Int:
+	// 	return pkg + ".ConstUnboundInt", nil
+	// case constant.Float:
+	// 	return pkg + ".ConstUnboundFloat", nil
+	// case constant.Complex:
+	// 	return pkg + ".ConstUnboundComplex", nil
+	// default:
+	// 	return "", fmt.Errorf("unknow kind of const %v %v", p.id, p.typ)
+	// }
 }
 
 func (v *GoConst) Name() string {
 	return v.id.Name
 }
-
 func (v *GoConst) ExportRegister() (string, error) {
 	kind, err := v.toQlangKind(qspec)
 	if err != nil {
 		return "", err
 	}
 	if v.typ.Val().Kind() == constant.Int {
-		kind := checkConstType(v.typ.Val().String())
-		if kind == ConstInt64 {
+		ck := checkConstType(v.typ.Val().String())
+		if ck == ConstInt64 {
 			return fmt.Sprintf("I.Const(%q, %v, int64(%v))", v.id.Name, kind, v.FullName()), nil
-		} else if kind == ConstUnit64 {
+		} else if ck == ConstUnit64 {
 			return fmt.Sprintf("I.Const(%q, %v, uint64(%v))", v.id.Name, kind, v.FullName()), nil
 		}
 	}
