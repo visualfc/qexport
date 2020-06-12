@@ -336,7 +336,9 @@ func LoadGoPkg(pkg string) (*GoPkg, error) {
 		packages.NeedSyntax |
 		packages.NeedTypesInfo |
 		packages.NeedTypes}
-	cfg.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
+	if pkg == "syscall/js" {
+		cfg.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
+	}
 	pkgs, err := packages.Load(cfg, pkg)
 	if err != nil {
 		return nil, err
@@ -475,16 +477,21 @@ func (p *GoConst) toQlangKind(pkg string) (string, error) {
 	case types.UntypedInt:
 		return pkg + ".ConstUnboundInt", nil
 	case types.UntypedRune:
-		return pkg + ".ConstUnboundRune", nil
+		return pkg + ".ConstBoundRune", nil
 	case types.UntypedFloat:
 		return pkg + ".ConstUnboundFloat", nil
 	case types.UntypedComplex:
 		return pkg + ".ConstUnboundComplex", nil
 	case types.UntypedString:
-		return pkg + ".ConstUnboundString", nil
+		return pkg + ".ConstBoundString", nil
 	case types.UntypedNil:
 		return pkg + ".ConstUnboundPtr", nil
+	case types.Byte:
+		return "reflect.Uint8", nil
+	case types.Rune:
+		return "reflect.Uint32", nil
 	}
+
 	// TODO
 	return "reflect." + strings.Title(baisc.Name()), nil
 

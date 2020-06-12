@@ -20,6 +20,7 @@ var (
 	flagExportPath               string
 	flagUpdatePath               string
 	flagFilterList               string
+	flagBuildTags                string
 )
 
 const help = `Export Go packages to Go+ modules.
@@ -41,6 +42,7 @@ func init() {
 	//flag.BoolVar(&flagSkipErrorImplementStruct, "skiperrimpl", true, "optional skip error interface implement struct.")
 	flag.StringVar(&flagExportPath, "outdir", "./lib", "optional set export output root path")
 	flag.StringVar(&flagFilterList, "filter", "", "optional set export filter regular expression list, separated by spaces.")
+	//flag.StringVar(&flagBuildTags, "tags", "", "optional a comma-separated list of build tags to consider satisfied during the build. ")
 }
 
 var (
@@ -108,7 +110,7 @@ func main() {
 		if isSkipPkg(pkg) {
 			continue
 		}
-		err := export(pkg, outpath, true)
+		err := export(pkg, outpath, flagBuildTags)
 		if err != nil {
 			log.Printf("warning skip pkg %q, error %v.\n", pkg, err)
 		} else {

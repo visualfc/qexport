@@ -20,7 +20,7 @@ func goimports(src []byte) ([]byte, error) {
 	return imports.Process("", src, nil)
 }
 
-func export(pkg string, outpath string, skipOSArch bool) error {
+func export(pkg string, outpath string, buildTags string) error {
 	p, err := LoadGoPkg(pkg)
 	if err != nil {
 		return err
@@ -104,6 +104,9 @@ func export(pkg string, outpath string, skipOSArch bool) error {
 	funcvreg = append(funcvreg, ")")
 
 	var heads []string
+	if pkg == "syscall/js" {
+		heads = append(heads, "// +build js\n")
+	}
 
 	heads = append(heads, fmt.Sprintf("package %v\n", p.Pkg.Types.Name()))
 	heads = append(heads, "import (")
