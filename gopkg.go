@@ -259,7 +259,7 @@ func (v *GoFunc) ExportDecl() (string, error) {
 	}
 
 	decl += fmt.Sprintf("// %v\n", simpleObjInfo(v.obj))
-	decl += fmt.Sprintf("func %v(zero int, p *%v.Context) {\n", v.qExecName(), qlang)
+	decl += fmt.Sprintf("func %v(_ int, p *%v.Context) {\n", v.qExecName(), qlang)
 	if argLen != 0 {
 		decl += fmt.Sprintf("\targs := p.GetArgs(%v)\n", argLen)
 	}
@@ -419,6 +419,8 @@ func (p *GoPkg) LoadAll(exported bool) error {
 			case *types.Func:
 				p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, typ, nil})
 			case *types.TypeName:
+				log.Printf("%v  %T IsAlias: %v\n", obj, obj.Type(), obj.(*types.TypeName).IsAlias())
+				//if ()
 				p.Types = append(p.Types, &GoType{GoObject{ident, obj}, typ})
 			case *types.Label:
 				// skip
@@ -513,9 +515,9 @@ func (v *GoConst) ExportRegister() (string, error) {
 	if v.typ.Val().Kind() == constant.Int {
 		ck := checkConstType(v.typ.Val().String())
 		if ck == ConstInt64 {
-			return fmt.Sprintf("I.Const(%q, %v, int64(%v))", v.id.Name, kind, v.FullName()), nil
+			return fmt.Sprintf("I.Const(%q, %v.Int64, int64(%v))", v.id.Name, qspec, v.FullName()), nil
 		} else if ck == ConstUnit64 {
-			return fmt.Sprintf("I.Const(%q, %v, uint64(%v))", v.id.Name, kind, v.FullName()), nil
+			return fmt.Sprintf("I.Const(%q, %v.Uint64, uint64(%v))", v.id.Name, qspec, v.FullName()), nil
 		}
 	}
 	return fmt.Sprintf("I.Const(%q, %v, %v)", v.id.Name, kind, v.FullName()), nil
