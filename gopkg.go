@@ -273,16 +273,21 @@ func (v *GoFunc) ExportDecl() (string, error) {
 		iv := v.Signature().Params().At(i)
 		it := simpleType(iv.Type().String())
 		var basic string
-		switch vt := iv.Type().(type) {
+		// switch vt := iv.Type().(type) {
+		// case *types.Basic:
+		// 	basic = vt.String()
+		// case *types.Named:
+		// 	if !vt.Obj().Exported() {
+		// 		return "", fmt.Errorf("param type is internal %v", vt)
+		// 	}
+		// 	//log.Printf("%T\n", vt.Obj().Type().Underlying())
+		// 	if vt.Obj().Type().Underlying()
+		// default:
+		// }
+		switch vt := iv.Type().Underlying().(type) {
 		case *types.Basic:
 			basic = vt.String()
-		case *types.Named:
-			if !vt.Obj().Exported() {
-				return "", fmt.Errorf("param type is internal %v", vt)
-			}
-		default:
 		}
-
 		if basic != "" && basic != it {
 			paramList = append(paramList, fmt.Sprintf("%v(args[%v].(%v))", it, argBase+i, basic))
 		} else {
@@ -421,8 +426,7 @@ func (p *GoPkg) LoadAll(exported bool) error {
 			case *types.Func:
 				p.Funcs = append(p.Funcs, &GoFunc{GoObject{ident, obj}, typ, nil})
 			case *types.TypeName:
-				log.Printf("%v  %T IsAlias: %v\n", obj, obj.Type(), obj.(*types.TypeName).IsAlias())
-				//if ()
+				//log.Printf("%v  %T IsAlias: %v\n", obj, obj.Type(), obj.(*types.TypeName).IsAlias())
 				p.Types = append(p.Types, &GoType{GoObject{ident, obj}, typ})
 			case *types.Label:
 				// skip
